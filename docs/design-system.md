@@ -1,6 +1,8 @@
 # Design System & Token Specification
-## Project: Suyanka App Template
+## Project: Suyanka App Template (generic demo screens — not yet adapted for SBS)
 ### Standards: Anti-AI Design Protocol Compliant
+
+> **Note for the SBS project:** the tokens below are the template's frozen output from a previous `anti-ai-design` run on its own generic demo screens (splash/auth/landing/dashboard SaaS shell). They are **not validated for the SBS product** — a field-verification tool used by installers outdoors and QC reviewers at a desk has a different context than a SaaS dashboard demo. Per `AGENTS.md`, `anti-ai-design` must run first for any SBS UI work; it should be given the SBS product context (users, platform, tone) via `docs/PRD.md` and `docs/domain-model.md` as input, and allowed to re-select or re-freeze tokens for this product rather than assuming the tokens below carry over. This documentation package does not prescribe new colors or tokens itself — that is UI design work, out of scope for a documentation task, and belongs to whoever runs `anti-ai-design` for the first SBS screen.
 
 ---
 
