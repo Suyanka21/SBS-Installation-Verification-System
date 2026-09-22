@@ -3,35 +3,44 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/lib/auth/auth-context";
+import { useAuth, SbsRole } from "@/lib/auth/auth-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
-  LayoutDashboard,
-  FolderGit2,
-  Database,
-  Settings,
-  LogOut,
-  Plus,
-  Search,
-  ExternalLink,
-  Cpu,
   Layers,
-  CheckCircle2,
-  FileText,
+  ClipboardCheck,
   AlertTriangle,
-  FolderPlus,
-  X,
+  FileCheck,
+  Search,
+  Filter,
+  LogOut,
+  Calendar,
+  MapPin,
+  Clock,
+  ArrowRight,
+  ShieldAlert,
+  CheckCircle2,
+  UserCheck,
 } from "lucide-react";
 
-interface ProjectItem {
+interface InstallationJobSummary {
   id: string;
-  name: string;
-  category: string;
-  status: "Active" | "Draft" | "Review";
-  updatedAt: string;
+  siteName: string;
+  tankModel: string;
+  status:
+    | "Not Started"
+    | "In Progress"
+    | "Submitted for Review"
+    | "Has Open Deficiencies"
+    | "Ready for Handover"
+    | "Closed";
+  assignedLead: string;
+  totalStages: number;
+  completedStages: number;
+  openDeficiencies: number;
+  plannedDemobilizationDate: string;
 }
 
 export default function DashboardPage() {
@@ -39,370 +48,433 @@ export default function DashboardPage() {
   const { user, signOut, signInDemo } = useAuth();
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<"all" | "active" | "draft">("all");
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [newProjectName, setNewProjectName] = useState("");
-  const [newProjectCategory, setNewProjectCategory] = useState("Web App");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
 
-  // Sample seed projects
-  const [projectsList, setProjectsList] = useState<ProjectItem[]>([
+  // Representative SBS Installation Jobs for Foundation Shell
+  const [jobsList] = useState<InstallationJobSummary[]>([
     {
-      id: "proj_1",
-      name: "SoteSafiri Travel Portal",
-      category: "Marketplace",
-      status: "Active",
-      updatedAt: "Today at 6:40 PM",
+      id: "job-001",
+      siteName: "Naivasha Horticultural Processing Plant",
+      tankModel: "SBS Cyclonic 250kL (Potable Water)",
+      status: "In Progress",
+      assignedLead: "Samuel Kiprop",
+      totalStages: 6,
+      completedStages: 3,
+      openDeficiencies: 1,
+      plannedDemobilizationDate: "2026-09-28",
     },
     {
-      id: "proj_2",
-      name: "Anti-AI Design Token Studio",
-      category: "Design System",
-      status: "Active",
-      updatedAt: "Yesterday",
+      id: "job-002",
+      siteName: "Eldoret Agro-Industrial Park",
+      tankModel: "SBS Standard 100kL (Fire Protection)",
+      status: "Submitted for Review",
+      assignedLead: "Samuel Kiprop",
+      totalStages: 5,
+      completedStages: 4,
+      openDeficiencies: 0,
+      plannedDemobilizationDate: "2026-09-30",
     },
     {
-      id: "proj_3",
-      name: "Supabase Drizzle Pipeline",
-      category: "Backend Engine",
-      status: "Review",
-      updatedAt: "3 days ago",
+      id: "job-003",
+      siteName: "Kilifi Coastal Community Water Depot",
+      tankModel: "SBS Elevated 50kL (Gravity Feed)",
+      status: "Ready for Handover",
+      assignedLead: "John Mwangi",
+      totalStages: 5,
+      completedStages: 5,
+      openDeficiencies: 0,
+      plannedDemobilizationDate: "2026-09-24",
     },
   ]);
 
-  const handleCreateProject = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newProjectName.trim()) return;
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
+        <Card className="max-w-md w-full border-white/10 text-center p-6 space-y-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent-sky/20 text-accent-sky mx-auto font-black text-xl">
+            SBS
+          </div>
+          <CardTitle>Session Required</CardTitle>
+          <CardDescription>
+            You must be signed in with an authorized operational role to access the SBS Installation Verification System.
+          </CardDescription>
+          <div className="pt-2">
+            <Link href="/auth">
+              <Button variant="primary" className="w-full">
+                Go to Sign In
+              </Button>
+            </Link>
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
-    const newProj: ProjectItem = {
-      id: "proj_" + Math.random().toString(36).substring(2, 9),
-      name: newProjectName.trim(),
-      category: newProjectCategory,
-      status: "Active",
-      updatedAt: "Just now",
-    };
+  const filteredJobs = jobsList.filter((job) => {
+    const matchesSearch =
+      job.siteName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      job.tankModel.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      job.assignedLead.toLowerCase().includes(searchQuery.toLowerCase());
 
-    setProjectsList([newProj, ...projectsList]);
-    setNewProjectName("");
-    setShowAddModal(false);
-  };
-
-  const filteredProjects = projectsList.filter((p) => {
-    const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
-    if (activeTab === "active") return matchesSearch && p.status === "Active";
-    if (activeTab === "draft") return matchesSearch && p.status === "Draft";
+    if (statusFilter === "all") return matchesSearch;
+    if (statusFilter === "in_progress") return matchesSearch && job.status === "In Progress";
+    if (statusFilter === "review") return matchesSearch && job.status === "Submitted for Review";
+    if (statusFilter === "deficiencies") return matchesSearch && job.openDeficiencies > 0;
+    if (statusFilter === "handover") return matchesSearch && job.status === "Ready for Handover";
     return matchesSearch;
   });
 
+  const getRoleBadgeVariant = (role: SbsRole) => {
+    switch (role) {
+      case "QC Reviewer":
+        return "success";
+      case "Lead Installer":
+        return "default";
+      case "Installer":
+        return "outline";
+      case "Management":
+        return "outline";
+      default:
+        return "outline";
+    }
+  };
+
   return (
-    <div className="flex min-h-screen bg-background text-slate-100">
-      {/* SIDEBAR NAVIGATION */}
-      <aside className="w-64 border-r border-white/10 bg-surface-50/70 p-4 hidden md:flex flex-col justify-between">
-        <div className="space-y-6">
-          {/* Brand header */}
-          <Link href="/" className="flex items-center space-x-2.5 px-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-sky text-black font-bold text-sm">
-              S
-            </div>
-            <div>
-              <p className="font-semibold text-sm text-white">Suyanka App</p>
-              <p className="text-[10px] text-slate-400 font-mono">Agent Foundation</p>
-            </div>
-          </Link>
-
-          {/* Navigation Links */}
-          <nav className="space-y-1">
-            <button
-              type="button"
-              className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg bg-surface-100 text-white text-sm font-medium border border-white/5"
-            >
-              <LayoutDashboard className="h-4 w-4 text-accent-sky" />
-              <span>Overview</span>
-            </button>
-
-            <button
-              type="button"
-              className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 text-sm transition-colors"
-            >
-              <FolderGit2 className="h-4 w-4" />
-              <span>Projects ({projectsList.length})</span>
-            </button>
-
-            <button
-              type="button"
-              className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 text-sm transition-colors"
-            >
-              <Database className="h-4 w-4" />
-              <span>Database (Drizzle)</span>
-            </button>
-
-            <button
-              type="button"
-              className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 text-sm transition-colors"
-            >
-              <Settings className="h-4 w-4" />
-              <span>Settings</span>
-            </button>
-          </nav>
-        </div>
-
-        {/* User profile & sign out */}
-        <div className="border-t border-white/10 pt-4 space-y-3">
-          {user ? (
-            <div className="flex items-center justify-between px-2">
-              <div className="flex flex-col">
-                <span className="text-xs font-medium text-white">{user.name}</span>
-                <span className="text-[10px] text-slate-500 font-mono truncate max-w-[140px]">
-                  {user.email}
-                </span>
+    <div className="min-h-screen bg-background flex flex-col">
+      {/* Top Application Bar */}
+      <header className="border-b border-white/10 bg-surface-50/80 backdrop-blur-md sticky top-0 z-40">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <Link href="/" className="flex items-center space-x-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-sky text-black font-extrabold text-sm">
+                SBS
               </div>
+              <span className="font-bold text-white tracking-tight hidden sm:inline">Verification Portal</span>
+            </Link>
+            <span className="text-slate-600 hidden sm:inline">|</span>
+            <Badge variant={getRoleBadgeVariant(user.role)} className="text-xs">
+              {user.role}
+            </Badge>
+          </div>
+
+          <div className="flex items-center space-x-3">
+            {/* Quick Role Switcher for prototype testing */}
+            <div className="hidden lg:flex items-center space-x-1.5 bg-surface-100/80 px-2 py-1 rounded-md border border-white/5 text-[11px] text-slate-400">
+              <span className="font-mono">Switch Role:</span>
               <button
                 type="button"
-                onClick={() => {
-                  signOut();
-                  router.push("/auth");
+                onClick={async () => {
+                  await signInDemo("Lead Installer");
+                  router.refresh();
                 }}
-                className="text-slate-400 hover:text-accent-rose p-1.5 rounded-md hover:bg-white/5 transition-colors"
-                title="Sign Out"
+                className={`px-1.5 py-0.5 rounded hover:text-white ${
+                  user.role === "Lead Installer" ? "text-accent-sky font-semibold" : ""
+                }`}
               >
-                <LogOut className="h-4 w-4" />
+                Lead
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  await signInDemo("QC Reviewer");
+                  router.refresh();
+                }}
+                className={`px-1.5 py-0.5 rounded hover:text-white ${
+                  user.role === "QC Reviewer" ? "text-accent-emerald font-semibold" : ""
+                }`}
+              >
+                QC
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  await signInDemo("Installer");
+                  router.refresh();
+                }}
+                className={`px-1.5 py-0.5 rounded hover:text-white ${
+                  user.role === "Installer" ? "text-slate-200 font-semibold" : ""
+                }`}
+              >
+                Installer
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  await signInDemo("Management");
+                  router.refresh();
+                }}
+                className={`px-1.5 py-0.5 rounded hover:text-white ${
+                  user.role === "Management" ? "text-slate-200 font-semibold" : ""
+                }`}
+              >
+                Mgmt
               </button>
             </div>
-          ) : (
-            <div className="space-y-2">
-              <Badge variant="warning" className="w-full justify-center text-[10px]">
-                Demo Mode (Unauthenticated)
-              </Badge>
-              <Button variant="secondary" size="sm" onClick={() => signInDemo()} className="w-full text-xs">
-                Activate Demo Account
-              </Button>
+
+            <div className="text-right hidden sm:block">
+              <p className="text-xs font-medium text-white">{user.name}</p>
+              <p className="text-[10px] text-slate-400 font-mono">{user.email}</p>
             </div>
-          )}
-        </div>
-      </aside>
 
-      {/* MAIN CONTENT AREA */}
-      <div className="flex-1 flex flex-col">
-        {/* TOPBAR */}
-        <header className="h-16 border-b border-white/10 px-6 flex items-center justify-between bg-surface-50/40 backdrop-blur-sm">
-          <div className="flex items-center space-x-3">
-            <span className="text-xs text-slate-500">Dashboard</span>
-            <span className="text-slate-600">/</span>
-            <span className="text-xs font-medium text-slate-200">Overview</span>
-          </div>
-
-          <div className="flex items-center space-x-3">
-            <Link href="/" className="text-xs text-slate-400 hover:text-white transition-colors">
-              ← Landing Page
-            </Link>
             <Button
-              variant="primary"
+              variant="ghost"
               size="sm"
-              onClick={() => setShowAddModal(true)}
-              className="space-x-1.5"
+              onClick={async () => {
+                await signOut();
+                router.push("/auth");
+              }}
+              className="text-slate-400 hover:text-accent-rose space-x-1"
             >
-              <Plus className="h-3.5 w-3.5" />
-              <span>New Project</span>
+              <LogOut className="h-4 w-4" />
+              <span className="hidden sm:inline text-xs">Sign Out</span>
             </Button>
           </div>
-        </header>
+        </div>
+      </header>
 
-        {/* DASHBOARD BODY */}
-        <main className="p-6 sm:p-8 space-y-8 flex-1 max-w-7xl w-full mx-auto">
-          {/* METRIC KPI CARDS */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card>
-              <p className="text-xs text-slate-400">Total Projects</p>
-              <div className="flex items-baseline justify-between mt-2">
-                <span className="text-2xl font-bold text-white">{projectsList.length}</span>
-                <Badge variant="success">+1 this week</Badge>
-              </div>
-            </Card>
-
-            <Card>
-              <p className="text-xs text-slate-400">Agent Skills</p>
-              <div className="flex items-baseline justify-between mt-2">
-                <span className="text-2xl font-bold text-accent-sky">27 Active</span>
-                <Badge variant="outline">.agents/skills</Badge>
-              </div>
-            </Card>
-
-            <Card>
-              <p className="text-xs text-slate-400">Design Protocol</p>
-              <div className="flex items-baseline justify-between mt-2">
-                <span className="text-2xl font-bold text-white">Anti-AI</span>
-                <Badge variant="success">Enforced</Badge>
-              </div>
-            </Card>
-
-            <Card>
-              <p className="text-xs text-slate-400">ORM Provider</p>
-              <div className="flex items-baseline justify-between mt-2">
-                <span className="text-2xl font-bold text-slate-300">Drizzle</span>
-                <Badge variant="outline">Supabase/Firebase</Badge>
-              </div>
-            </Card>
+      {/* Main Operational Container */}
+      <main className="flex-1 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 w-full space-y-8">
+        {/* Welcome & Role Context Banner */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-6">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-white">
+              {user.role === "QC Reviewer"
+                ? "Quality Engineering Review Queue"
+                : user.role === "Management"
+                ? "Installation Lifecycle & Handover Oversight"
+                : "Active Field Installation Jobs"}
+            </h1>
+            <p className="text-sm text-slate-400 mt-1">
+              {user.role === "QC Reviewer"
+                ? "Inspect requirement-linked evidence, validate completeness gates, and issue categorized deficiency decisions."
+                : user.role === "Management"
+                ? "Monitor site progress, review demobilization timelines, and inspect practical completion records."
+                : "Record offline-capable evidence against assigned requirements and submit stages for remote QC approval."}
+            </p>
           </div>
 
-          {/* PROJECT MANAGEMENT TABLE & CONTROLS */}
-          <Card>
-            <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4">
-              <div>
-                <CardTitle>Active Application Projects</CardTitle>
-                <CardDescription>
-                  Manage and monitor features governed by <code className="text-accent-sky font-mono">docs/PRD.md</code>.
-                </CardDescription>
-              </div>
+          <div className="flex items-center space-x-2">
+            <Badge variant="outline" className="border-accent-sky/30 text-accent-sky text-xs py-1">
+              Offline Cache Ready
+            </Badge>
+          </div>
+        </div>
 
-              {/* Search & Filter */}
-              <div className="flex items-center space-x-2 w-full sm:w-auto">
-                <div className="relative w-full sm:w-64">
-                  <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
-                  <input
-                    type="text"
-                    placeholder="Search projects..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full h-9 pl-9 pr-3 rounded-lg border border-white/10 bg-surface-100 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-accent-sky"
-                  />
-                </div>
+        {/* Operational Metrics Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <Card className="border-white/10 bg-surface-100/50">
+            <CardContent className="p-4 sm:p-5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-slate-400">Assigned Jobs</span>
+                <Layers className="h-4 w-4 text-accent-sky" />
               </div>
-            </CardHeader>
-
-            <CardContent>
-              {filteredProjects.length > 0 ? (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm">
-                    <thead>
-                      <tr className="border-b border-white/5 text-xs text-slate-400">
-                        <th className="pb-3 font-medium">Project Name</th>
-                        <th className="pb-3 font-medium">Category</th>
-                        <th className="pb-3 font-medium">Status</th>
-                        <th className="pb-3 font-medium">Last Modified</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5">
-                      {filteredProjects.map((proj) => (
-                        <tr key={proj.id} className="hover:bg-white/[0.02] transition-colors">
-                          <td className="py-3.5 font-medium text-white flex items-center space-x-2">
-                            <span className="h-2 w-2 rounded-full bg-accent-sky" />
-                            <span>{proj.name}</span>
-                          </td>
-                          <td className="py-3.5 text-xs text-slate-400">{proj.category}</td>
-                          <td className="py-3.5">
-                            <Badge
-                              variant={
-                                proj.status === "Active"
-                                  ? "success"
-                                  : proj.status === "Review"
-                                  ? "warning"
-                                  : "default"
-                              }
-                            >
-                              {proj.status}
-                            </Badge>
-                          </td>
-                          <td className="py-3.5 text-xs text-slate-500 font-mono">{proj.updatedAt}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                /* EMPTY STATE CARD (CodeRabbit DNA & Anti-AI Design UX Pillar) */
-                <div className="py-12 flex flex-col items-center justify-center text-center space-y-3">
-                  <div className="h-12 w-12 rounded-full bg-surface-100 border border-white/10 flex items-center justify-center text-slate-400">
-                    <FolderPlus className="h-6 w-6" />
-                  </div>
-                  <h4 className="text-base font-semibold text-white">No matching projects found</h4>
-                  <p className="text-xs text-slate-400 max-w-sm">
-                    No projects match your search criteria. Create a new project or clear your filter.
-                  </p>
-                  <Button variant="secondary" size="sm" onClick={() => setShowAddModal(true)}>
-                    Create First Project
-                  </Button>
-                </div>
-              )}
+              <div className="mt-2 flex items-baseline">
+                <span className="text-2xl font-bold text-white">3</span>
+                <span className="ml-2 text-xs text-slate-500">active sites</span>
+              </div>
             </CardContent>
           </Card>
 
-          {/* AI AGENT INTEGRATION PROMPT CARD */}
-          <div className="rounded-xl border border-accent-sky/20 bg-accent-sky/[0.03] p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div className="space-y-1">
-              <div className="flex items-center space-x-2">
-                <Badge variant="outline" className="border-accent-sky/30 text-accent-sky">
-                  Pro-Tip for Agents
-                </Badge>
-                <span className="text-xs text-slate-400">Documentation-Driven Development</span>
+          <Card className="border-white/10 bg-surface-100/50">
+            <CardContent className="p-4 sm:p-5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-slate-400">Stages Under Review</span>
+                <ClipboardCheck className="h-4 w-4 text-accent-emerald" />
               </div>
-              <p className="text-sm text-slate-200">
-                To build new features into this template, open <code className="text-accent-sky font-mono">docs/PRD.md</code>, specify your requirements, and instruct your AI coder:
-              </p>
-              <p className="text-xs text-slate-400 font-mono">
-                &quot;Read docs/PRD.md and implement the user journey in src/app/&quot;
-              </p>
-            </div>
+              <div className="mt-2 flex items-baseline">
+                <span className="text-2xl font-bold text-white">1</span>
+                <span className="ml-2 text-xs text-slate-500">pending QC</span>
+              </div>
+            </CardContent>
+          </Card>
 
-            <Link href="/splash">
-              <Button variant="outline" size="sm" className="shrink-0 space-x-1.5">
-                <FileText className="h-3.5 w-3.5 text-accent-sky" />
-                <span>View Splash Demo</span>
-              </Button>
-            </Link>
+          <Card className="border-white/10 bg-surface-100/50">
+            <CardContent className="p-4 sm:p-5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-slate-400">Open Deficiencies</span>
+                <AlertTriangle className="h-4 w-4 text-amber-400" />
+              </div>
+              <div className="mt-2 flex items-baseline">
+                <span className="text-2xl font-bold text-amber-400">1</span>
+                <span className="ml-2 text-xs text-slate-500">action required</span>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-white/10 bg-surface-100/50">
+            <CardContent className="p-4 sm:p-5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-slate-400">Ready for Handover</span>
+                <FileCheck className="h-4 w-4 text-accent-emerald" />
+              </div>
+              <div className="mt-2 flex items-baseline">
+                <span className="text-2xl font-bold text-white">1</span>
+                <span className="ml-2 text-xs text-slate-500">certificate pending</span>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Filter & Search Bar */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search site, tank model, or installer..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full rounded-lg border border-white/10 bg-surface-100 pl-9 pr-4 py-2 text-sm text-white placeholder-slate-500 focus:border-accent-sky focus:outline-none focus:ring-1 focus:ring-accent-sky"
+            />
           </div>
-        </main>
-      </div>
 
-      {/* CREATE PROJECT MODAL */}
-      {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="w-full max-w-md rounded-xl border border-white/15 bg-surface-50 p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
-              <h3 className="text-base font-semibold text-white">Add New Project</h3>
-              <button
-                type="button"
-                onClick={() => setShowAddModal(false)}
-                className="text-slate-400 hover:text-white"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateProject} className="space-y-4">
-              <Input
-                label="Project Title"
-                placeholder="e.g., Realtime Analytics Engine"
-                value={newProjectName}
-                onChange={(e) => setNewProjectName(e.target.value)}
-                autoFocus
-              />
-
-              <div className="space-y-1.5">
-                <label className="block text-xs font-medium text-slate-300">Category</label>
-                <select
-                  value={newProjectCategory}
-                  onChange={(e) => setNewProjectCategory(e.target.value)}
-                  className="w-full h-10 rounded-lg border border-white/10 bg-surface-100 px-3 text-sm text-slate-100 focus:outline-none focus:border-accent-sky"
-                >
-                  <option value="Web App">Web App</option>
-                  <option value="Mobile App">Mobile App</option>
-                  <option value="Marketplace">Marketplace</option>
-                  <option value="Backend Engine">Backend Engine</option>
-                  <option value="Design System">Design System</option>
-                </select>
-              </div>
-
-              <div className="flex justify-end space-x-2 pt-2">
-                <Button variant="ghost" size="sm" type="button" onClick={() => setShowAddModal(false)}>
-                  Cancel
-                </Button>
-                <Button variant="primary" size="sm" type="submit">
-                  Save Project
-                </Button>
-              </div>
-            </form>
+          <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 sm:pb-0 text-xs">
+            <button
+              type="button"
+              onClick={() => setStatusFilter("all")}
+              className={`px-3 py-1.5 rounded-lg border transition-colors ${
+                statusFilter === "all"
+                  ? "bg-surface-200 border-accent-sky/50 text-white font-medium"
+                  : "bg-surface-100 border-white/10 text-slate-400 hover:text-white"
+              }`}
+            >
+              All Jobs
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter("in_progress")}
+              className={`px-3 py-1.5 rounded-lg border transition-colors ${
+                statusFilter === "in_progress"
+                  ? "bg-surface-200 border-accent-sky/50 text-white font-medium"
+                  : "bg-surface-100 border-white/10 text-slate-400 hover:text-white"
+              }`}
+            >
+              In Progress
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter("review")}
+              className={`px-3 py-1.5 rounded-lg border transition-colors ${
+                statusFilter === "review"
+                  ? "bg-surface-200 border-accent-sky/50 text-white font-medium"
+                  : "bg-surface-100 border-white/10 text-slate-400 hover:text-white"
+              }`}
+            >
+              Under Review
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter("deficiencies")}
+              className={`px-3 py-1.5 rounded-lg border transition-colors ${
+                statusFilter === "deficiencies"
+                  ? "bg-surface-200 border-amber-400/50 text-amber-300 font-medium"
+                  : "bg-surface-100 border-white/10 text-slate-400 hover:text-white"
+              }`}
+            >
+              Deficiencies (1)
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatusFilter("handover")}
+              className={`px-3 py-1.5 rounded-lg border transition-colors ${
+                statusFilter === "handover"
+                  ? "bg-surface-200 border-accent-emerald/50 text-accent-emerald font-medium"
+                  : "bg-surface-100 border-white/10 text-slate-400 hover:text-white"
+              }`}
+            >
+              Ready for Handover
+            </button>
           </div>
         </div>
-      )}
+
+        {/* Jobs List Section */}
+        <div className="space-y-4">
+          {filteredJobs.length === 0 ? (
+            <Card className="border-white/10 bg-surface-100/30 text-center py-12">
+              <CardContent className="space-y-3">
+                <Layers className="h-8 w-8 text-slate-500 mx-auto" />
+                <CardTitle className="text-base">No Matching Installation Jobs Found</CardTitle>
+                <CardDescription>
+                  Try adjusting your search criteria or clear the current status filter.
+                </CardDescription>
+                <Button variant="secondary" size="sm" onClick={() => { setSearchQuery(""); setStatusFilter("all"); }}>
+                  Reset Filters
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            filteredJobs.map((job) => (
+              <Card
+                key={job.id}
+                className="border-white/10 bg-surface-100/40 hover:border-white/20 transition-colors"
+              >
+                <CardContent className="p-5 sm:p-6">
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                    <div className="space-y-1.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-mono text-xs text-slate-400">{job.id}</span>
+                        <h2 className="text-base sm:text-lg font-semibold text-white">{job.siteName}</h2>
+                        {job.status === "Ready for Handover" && (
+                          <Badge variant="success" className="text-xs">
+                            Ready for Handover
+                          </Badge>
+                        )}
+                        {job.status === "Submitted for Review" && (
+                          <Badge variant="default" className="text-xs bg-sky-500/20 text-sky-300 border-sky-500/30">
+                            Under Review
+                          </Badge>
+                        )}
+                        {job.status === "In Progress" && (
+                          <Badge variant="outline" className="text-xs text-slate-300">
+                            In Progress
+                          </Badge>
+                        )}
+                        {job.openDeficiencies > 0 && (
+                          <Badge variant="danger" className="text-xs flex items-center space-x-1">
+                            <AlertTriangle className="h-3 w-3" />
+                            <span>{job.openDeficiencies} Deficiency Open</span>
+                          </Badge>
+                        )}
+                      </div>
+
+                      <p className="text-sm text-slate-300 font-medium">{job.tankModel}</p>
+
+                      <div className="flex flex-wrap items-center gap-4 text-xs text-slate-400 pt-1">
+                        <span className="flex items-center space-x-1">
+                          <UserCheck className="h-3.5 w-3.5 text-slate-500" />
+                          <span>Lead: {job.assignedLead}</span>
+                        </span>
+                        <span className="flex items-center space-x-1">
+                          <Clock className="h-3.5 w-3.5 text-slate-500" />
+                          <span>
+                            Stage Progress: {job.completedStages}/{job.totalStages} stages verified
+                          </span>
+                        </span>
+                        <span className="flex items-center space-x-1 text-slate-300">
+                          <Calendar className="h-3.5 w-3.5 text-accent-sky" />
+                          <span>Demobilization: {job.plannedDemobilizationDate}</span>
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center space-x-3 pt-2 lg:pt-0">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="space-x-1.5 border-white/10 hover:border-accent-sky/50"
+                        onClick={() => alert(`Job ${job.id} detail view will be wired in Slice 1.`)}
+                      >
+                        <span>{user.role === "QC Reviewer" ? "Inspect Job" : "Open Verification"}</span>
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </div>
+      </main>
     </div>
   );
 }

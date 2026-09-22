@@ -8,43 +8,40 @@ export function Footer() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex flex-col md:flex-row justify-between items-center gap-6">
           <div className="flex items-center space-x-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-sky text-black font-bold text-sm">
-              S
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-sky text-black font-extrabold text-sm">
+              SBS
             </div>
             <div>
-              <p className="text-white font-medium">Suyanka App Template</p>
-              <p className="text-xs text-slate-500">Autonomous & Modular Agent Skills Architecture</p>
+              <p className="text-white font-medium">SBS Tanks Kenya</p>
+              <p className="text-xs text-slate-500">Installation Verification System (IVS)</p>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center justify-center gap-6 text-xs text-slate-400">
-            <Link href="/splash" className="hover:text-white transition-colors">
-              Splash Screen
-            </Link>
             <Link href="/auth" className="hover:text-white transition-colors">
-              Authentication
+              Field Sign In
             </Link>
             <Link href="/dashboard" className="hover:text-white transition-colors">
-              Dashboard Shell
+              Verification Portal
             </Link>
-            <a
-              href="https://github.com/Suyanka21/agent-skills-starter-template"
-              target="_blank"
-              rel="noreferrer"
-              className="hover:text-white transition-colors"
-            >
-              GitHub Repository
-            </a>
+            <span className="text-slate-600">•</span>
+            <span className="text-slate-400">Human QC Approval Model</span>
+            <span className="text-slate-600">•</span>
+            <span className="text-slate-400">Offline-First Evidence Capture</span>
           </div>
 
           <div className="flex items-center space-x-2">
-            <Badge variant="success">Anti-AI Design Verified</Badge>
-            <Badge variant="outline">Next.js 14</Badge>
+            <Badge variant="outline" className="border-accent-sky/30 text-accent-sky text-[11px]">
+              Governed Baseline
+            </Badge>
+            <Badge variant="success" className="text-[11px]">
+              Anti-AI Design
+            </Badge>
           </div>
         </div>
 
-        <div className="mt-8 pt-8 border-t border-white/5 text-center text-xs text-slate-600">
-          © {new Date().getFullYear()} Suyanka App Template. Built with permanent reasoning protocols.
+        <div className="mt-8 pt-8 border-t border-white/5 text-center text-xs text-slate-500">
+          © {new Date().getFullYear()} SBS Tanks. Installation Verification System — Structured, attributable quality compliance.
         </div>
       </div>
     </footer>
