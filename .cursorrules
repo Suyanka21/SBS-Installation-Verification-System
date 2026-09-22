@@ -1,0 +1,5 @@
+# Agent Skills Configuration for Cursor
+Follow all protocols and rules defined in AGENTS.md and .agents/rules/skill-orchestration.md.
+Load skills on-demand from .agents/skills/<skill-name>/SKILL.md.
+UI generation must always follow .agents/skills/anti-ai-design/SKILL.md prior to frontend-ui-engineering.
+Permanent reasoning layers: global-reasoning-layer and coderabbit-dna.

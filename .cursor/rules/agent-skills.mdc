@@ -1,0 +1,14 @@
+---
+description: Universal agent skills and defensive engineering protocols
+globs: *
+alwaysApply: true
+---
+
+# Agent Skills Integration
+
+This workspace operates under the modular `.agents` skill architecture:
+- Master Orchestrator: `.agents/skills/using-agent-skills/SKILL.md`
+- Foundation Rules: Follow `AGENTS.md` and `.agents/rules/skill-orchestration.md`
+- Core Mindset: `global-reasoning-layer` + `coderabbit-dna` apply to every task.
+- Mandatory UI Order: Always execute `.agents/skills/anti-ai-design/SKILL.md` before generating frontend code.
+- Progressive Skill Loading: Check `.agents/skills/<skill-name>/SKILL.md` when executing tasks that match any skill domain.
