@@ -1,12 +1,15 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+
+import { SbsRole } from "./roles";
+export type { SbsRole };
 
 export interface User {
   id: string;
   name: string;
   email: string;
-  role: "admin" | "member" | "viewer";
+  role: SbsRole;
   createdAt: string;
 }
 
@@ -14,9 +17,10 @@ interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   signIn: (email: string, pass: string) => Promise<boolean>;
-  signUp: (name: string, email: string, pass: string) => Promise<boolean>;
-  signInDemo: () => void;
-  signOut: () => void;
+  signUp: (name: string, email: string, pass: string, role?: SbsRole) => Promise<boolean>;
+  signInDemo: (role?: SbsRole) => Promise<boolean>;
+  signOut: () => Promise<void>;
+  refreshSession: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -25,77 +29,112 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  useEffect(() => {
-    // Check local storage for session
+  // Authenticate against real server session on load
+  const refreshSession = useCallback(async () => {
     try {
-      const stored = localStorage.getItem("suyanka_auth_user");
-      if (stored) {
-        setUser(JSON.parse(stored));
+      const res = await fetch("/api/auth/me", {
+        method: "GET",
+        headers: { "Cache-Control": "no-cache" },
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setUser(data.user || null);
+      } else {
+        setUser(null);
       }
     } catch {
-      // Ignore storage errors in private browsing
+      setUser(null);
     } finally {
       setIsLoading(false);
     }
   }, []);
 
-  const saveUserSession = (userData: User | null) => {
-    setUser(userData);
-    if (userData) {
-      localStorage.setItem("suyanka_auth_user", JSON.stringify(userData));
-    } else {
-      localStorage.removeItem("suyanka_auth_user");
+  useEffect(() => {
+    refreshSession();
+  }, [refreshSession]);
+
+  const signIn = async (email: string, pass: string): Promise<boolean> => {
+    setIsLoading(true);
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password: pass }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Authentication failed: Invalid credentials");
+      }
+
+      setUser(data.user);
+      return true;
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const signIn = async (email: string): Promise<boolean> => {
+  const signUp = async (
+    name: string,
+    email: string,
+    pass: string,
+    role: SbsRole = "Installer"
+  ): Promise<boolean> => {
     setIsLoading(true);
-    // Simulate network delay
-    await new Promise((resolve) => setTimeout(resolve, 600));
+    try {
+      const res = await fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, password: pass, role }),
+      });
 
-    const mockUser: User = {
-      id: "usr_" + Math.random().toString(36).substring(2, 9),
-      name: email.split("@")[0].replace(/[._]/g, " ").toUpperCase(),
-      email,
-      role: "admin",
-      createdAt: new Date().toISOString(),
-    };
+      const data = await res.json();
 
-    saveUserSession(mockUser);
-    setIsLoading(false);
-    return true;
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Registration failed");
+      }
+
+      setUser(data.user);
+      return true;
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const signUp = async (name: string, email: string): Promise<boolean> => {
+  const signInDemo = async (role: SbsRole = "Lead Installer"): Promise<boolean> => {
     setIsLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 600));
+    try {
+      const res = await fetch("/api/auth/demo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role }),
+      });
 
-    const mockUser: User = {
-      id: "usr_" + Math.random().toString(36).substring(2, 9),
-      name,
-      email,
-      role: "admin",
-      createdAt: new Date().toISOString(),
-    };
+      const data = await res.json();
 
-    saveUserSession(mockUser);
-    setIsLoading(false);
-    return true;
+      if (!res.ok || !data.success) {
+        throw new Error(
+          data.error || "Demo authentication is disabled for this build per docs/identity-and-auth.md"
+        );
+      }
+
+      setUser(data.user);
+      return true;
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const signInDemo = () => {
-    const demoUser: User = {
-      id: "usr_demo",
-      name: "Suyanka Explorer",
-      email: "demo@suyanka.app",
-      role: "admin",
-      createdAt: new Date().toISOString(),
-    };
-    saveUserSession(demoUser);
-  };
-
-  const signOut = () => {
-    saveUserSession(null);
+  const signOut = async (): Promise<void> => {
+    setIsLoading(true);
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+      setUser(null);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -107,6 +146,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signUp,
         signInDemo,
         signOut,
+        refreshSession,
       }}
     >
       {children}

@@ -1,17 +1,17 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { useAuth } from "@/lib/auth/auth-context";
+import { useAuth, SbsRole } from "@/lib/auth/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Tabs } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Lock, Mail, User as UserIcon, ArrowRight, Zap, CheckCircle2, AlertCircle } from "lucide-react";
+import { Lock, Mail, User as UserIcon, ArrowRight, Zap, CheckCircle2, AlertCircle, ShieldCheck } from "lucide-react";
 
-export default function AuthPage() {
+function AuthContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialMode = searchParams.get("mode") === "signup" ? "signup" : "signin";
@@ -22,6 +22,7 @@ export default function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  const [role, setRole] = useState<SbsRole>("Lead Installer");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -44,8 +45,9 @@ export default function AuthPage() {
       setIsSubmitting(true);
       await signIn(email, password);
       router.push("/dashboard");
-    } catch {
-      setError("Failed to sign in. Please verify credentials.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to sign in. Please verify credentials.";
+      setError(msg);
     } finally {
       setIsSubmitting(false);
     }
@@ -77,18 +79,28 @@ export default function AuthPage() {
 
     try {
       setIsSubmitting(true);
-      await signUp(name, email, password);
+      await signUp(name, email, password, role);
       router.push("/dashboard");
-    } catch {
-      setError("Failed to create account. Please try again.");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Failed to create account. Please try again.";
+      setError(msg);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleQuickDemo = () => {
-    signInDemo();
-    router.push("/dashboard");
+  const handleQuickDemo = async (demoRole: SbsRole) => {
+    setError(null);
+    try {
+      setIsSubmitting(true);
+      await signInDemo(demoRole);
+      router.push("/dashboard");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Demo sign-in failed.";
+      setError(msg);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -100,27 +112,27 @@ export default function AuthPage() {
       <div className="mb-6 text-center z-10">
         <Link href="/" className="inline-flex items-center space-x-2.5">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-sky text-black font-extrabold text-lg shadow-sm">
-            S
+            SBS
           </div>
-          <span className="text-xl font-bold tracking-tight text-white">Suyanka App</span>
+          <span className="text-xl font-bold tracking-tight text-white">SBS Tanks</span>
         </Link>
-        <p className="mt-1 text-xs text-slate-400">Authentication & Access Portal</p>
+        <p className="mt-1 text-xs text-slate-400">Installation Verification System • Access Portal</p>
       </div>
 
       <Card className="w-full max-w-md border-white/10 z-10 shadow-2xl">
         <CardHeader className="text-center pb-2">
-          <CardTitle>Welcome</CardTitle>
+          <CardTitle>Field Access</CardTitle>
           <CardDescription>
             {activeTab === "signin"
-              ? "Sign in to access your dashboard and active projects"
-              : "Create a new developer account in seconds"}
+              ? "Sign in to access assigned installation jobs and review queues"
+              : "Register as an installer, QC reviewer, or management user"}
           </CardDescription>
 
           <div className="pt-2">
             <Tabs
               tabs={[
                 { id: "signin", label: "Sign In" },
-                { id: "signup", label: "Create Account" },
+                { id: "signup", label: "Register Account" },
               ]}
               activeTab={activeTab}
               onChange={(tab) => {
@@ -142,9 +154,9 @@ export default function AuthPage() {
           {activeTab === "signin" ? (
             <form onSubmit={handleSignIn} className="space-y-3.5">
               <Input
-                label="Email Address"
+                label="Corporate or Field Email"
                 type="email"
-                placeholder="developer@suyanka.app"
+                placeholder="installer@sbstanks.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 autoComplete="email"
@@ -161,19 +173,12 @@ export default function AuthPage() {
               <div className="flex items-center justify-between text-xs text-slate-400">
                 <label className="flex items-center space-x-1.5 cursor-pointer">
                   <input type="checkbox" className="rounded border-white/20 bg-surface-100 text-accent-sky" />
-                  <span>Remember me</span>
+                  <span>Remember me on this device</span>
                 </label>
-                <button
-                  type="button"
-                  onClick={() => alert("Password reset link will be sent to your email when Supabase/Firebase is connected.")}
-                  className="text-accent-sky hover:underline"
-                >
-                  Forgot password?
-                </button>
               </div>
 
               <Button type="submit" variant="primary" className="w-full" isLoading={isSubmitting}>
-                Sign In to Dashboard
+                Sign In to Verification Portal
               </Button>
             </form>
           ) : (
@@ -181,18 +186,31 @@ export default function AuthPage() {
               <Input
                 label="Full Name"
                 type="text"
-                placeholder="Alex Mercer"
+                placeholder="Samuel Kiprop"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
               />
               <Input
                 label="Email Address"
                 type="email"
-                placeholder="developer@suyanka.app"
+                placeholder="s.kiprop@sbstanks.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 autoComplete="email"
               />
+              <div className="space-y-1.5">
+                <label className="block text-xs font-medium text-slate-300">Operational Role</label>
+                <select
+                  value={role}
+                  onChange={(e) => setRole(e.target.value as SbsRole)}
+                  className="w-full rounded-md border border-white/10 bg-surface-100 px-3 py-2 text-sm text-white focus:border-accent-sky focus:outline-none focus:ring-1 focus:ring-accent-sky"
+                >
+                  <option value="Lead Installer">Lead Installer (Field Lead & Submission)</option>
+                  <option value="Installer">Installer (Field Capture & Issue Flagging)</option>
+                  <option value="QC Reviewer">QC Reviewer (Engineering Verification & Approvals)</option>
+                  <option value="Management">Management (Lifecycle & Handover Oversight)</option>
+                </select>
+              </div>
               <Input
                 label="Create Password"
                 type="password"
@@ -211,43 +229,85 @@ export default function AuthPage() {
               />
 
               <Button type="submit" variant="primary" className="w-full mt-2" isLoading={isSubmitting}>
-                Create Free Account
+                Create Account
               </Button>
             </form>
           )}
 
-          {/* Quick Demo Bypass Button */}
+          {/* Role-Specific Prototype Testing Mode */}
           <div className="pt-2">
             <div className="relative flex py-2 items-center">
               <div className="flex-grow border-t border-white/10" />
               <span className="flex-shrink mx-3 text-[10px] uppercase tracking-wider text-slate-500 font-mono">
-                Prototype Testing Mode
+                Prototype Demo Roles
               </span>
               <div className="flex-grow border-t border-white/10" />
             </div>
 
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={handleQuickDemo}
-              className="w-full border-accent-sky/20 hover:border-accent-sky/50 text-accent-sky text-xs flex items-center justify-center space-x-2"
-            >
-              <Zap className="h-3.5 w-3.5 fill-current" />
-              <span>Instant Demo Pass-Through (Bypass Auth)</span>
-            </Button>
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => handleQuickDemo("Lead Installer")}
+                className="text-xs border-accent-sky/20 hover:border-accent-sky/50 text-accent-sky"
+              >
+                Lead Installer
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => handleQuickDemo("QC Reviewer")}
+                className="text-xs border-accent-emerald/20 hover:border-accent-emerald/50 text-accent-emerald"
+              >
+                QC Reviewer
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => handleQuickDemo("Installer")}
+                className="text-xs border-white/10 hover:border-white/30 text-slate-300"
+              >
+                Installer
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => handleQuickDemo("Management")}
+                className="text-xs border-white/10 hover:border-white/30 text-slate-300"
+              >
+                Management
+              </Button>
+            </div>
+            <p className="mt-2 text-[10px] text-slate-500 text-center">
+              Note: Unspoofable identity against backend Auth is enforced in Slice 0 per docs/identity-and-auth.md.
+            </p>
           </div>
         </CardContent>
 
         <CardFooter className="flex flex-col space-y-2 text-center text-xs text-slate-500">
-          <p>
-            Pluggable with Supabase Auth or Firebase Authentication. Defined in{" "}
-            <code className="text-slate-400 font-mono">src/lib/auth/</code>
-          </p>
           <Link href="/" className="text-slate-400 hover:text-white transition-colors">
-            ← Return to Landing Page
+            ← Return to Overview
           </Link>
         </CardFooter>
       </Card>
     </div>
+  );
+}
+
+export default function AuthPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-background flex items-center justify-center text-slate-400 text-sm">
+          Loading Verification Portal...
+        </div>
+      }
+    >
+      <AuthContent />
+    </Suspense>
   );
 }
