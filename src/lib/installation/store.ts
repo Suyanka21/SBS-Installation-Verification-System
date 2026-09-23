@@ -255,9 +255,14 @@ export function getPopulatedJob(jobId: string): PopulatedJob | null {
         allowsNa: true,
       };
 
+      const reqEvidence = Array.from(evidenceItemsMap.values())
+        .filter((e) => e.requirementId === req.requirementId)
+        .sort((a, b) => new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime());
+
       return {
         ...req,
         template: rtTpl,
+        evidenceItems: reqEvidence,
       };
     });
 
@@ -276,6 +281,70 @@ export function getPopulatedJob(jobId: string): PopulatedJob | null {
     guideline,
     stages: populatedStages,
   };
+}
+
+// --- ENTITY LOOKUPS & MUTATIONS FOR EVIDENCE & WORKFLOW ENGINE ---
+
+const evidenceItemsMap = new Map<string, import("./types").EvidenceItem>();
+const evidenceByClientUuidMap = new Map<string, import("./types").EvidenceItem>();
+
+export function getRequirementById(requirementId: string): Requirement | null {
+  initializeInstallationStore();
+  return requirementsMap.get(requirementId) || null;
+}
+
+export function updateRequirementStatus(requirementId: string, status: import("./types").RequirementStatus) {
+  const req = requirementsMap.get(requirementId);
+  if (req) {
+    req.status = status;
+  }
+}
+
+export function getStageById(stageId: string): InstallationStage | null {
+  initializeInstallationStore();
+  return stagesMap.get(stageId) || null;
+}
+
+export function updateStageStatus(stageId: string, status: import("./types").StageStatus) {
+  const stage = stagesMap.get(stageId);
+  if (stage) {
+    stage.status = status;
+  }
+}
+
+export function updateJobStatus(jobId: string, status: import("./types").JobStatus) {
+  const job = jobsMap.get(jobId);
+  if (job) {
+    job.status = status;
+  }
+}
+
+export function getRequirementTemplateById(templateId: string): RequirementTemplate | null {
+  initializeInstallationStore();
+  return requirementTemplatesMap.get(templateId) || null;
+}
+
+export function saveEvidenceItem(item: import("./types").EvidenceItem) {
+  evidenceItemsMap.set(item.evidenceId, item);
+  evidenceByClientUuidMap.set(item.clientUuid, item);
+}
+
+export function getEvidenceByClientUuid(clientUuid: string): import("./types").EvidenceItem | null {
+  return evidenceByClientUuidMap.get(clientUuid) || null;
+}
+
+export function getEvidenceById(evidenceId: string): import("./types").EvidenceItem | null {
+  return evidenceItemsMap.get(evidenceId) || null;
+}
+
+export function getEvidenceByRequirementId(requirementId: string): import("./types").EvidenceItem[] {
+  return Array.from(evidenceItemsMap.values())
+    .filter((e) => e.requirementId === requirementId)
+    .sort((a, b) => new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime());
+}
+
+export function getAllEvidence(): import("./types").EvidenceItem[] {
+  return Array.from(evidenceItemsMap.values());
 }
 
 // Helper to seed an initial job for development if none exists

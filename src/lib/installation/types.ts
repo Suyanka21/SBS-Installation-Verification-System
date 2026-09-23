@@ -89,9 +89,34 @@ export interface Requirement {
   openDeficiencyId: string | null;
 }
 
+export type EvidenceStatus = "Pending Review" | "Approved" | "Rejected" | "Superseded";
+
+export interface EvidenceItem {
+  evidenceId: string;
+  clientUuid: string;
+  requirementId: string;
+  type: EvidenceType;
+  fileRef: string | null;
+  fileName?: string | null;
+  fileSize?: number | null;
+  measurementValue: string | null;
+  measurementUnit: string | null;
+  submittedBy: string;
+  submittedByName?: string;
+  submittedAt: string;
+  deviceCapturedAt: string | null;
+  sequenceNumber: number | null;
+  status: EvidenceStatus;
+  rejectionComment: string | null;
+  supersedesEvidenceId: string | null;
+  gpsLat?: number | null;
+  gpsLng?: number | null;
+}
+
 // Populated views for UI presentation
 export interface PopulatedRequirement extends Requirement {
   template: RequirementTemplate;
+  evidenceItems: EvidenceItem[];
 }
 
 export interface PopulatedStage extends InstallationStage {
