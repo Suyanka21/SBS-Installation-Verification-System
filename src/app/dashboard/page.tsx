@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth, SbsRole } from "@/lib/auth/auth-context";
@@ -17,464 +17,590 @@ import {
   Filter,
   LogOut,
   Calendar,
-  MapPin,
+  Building,
   Clock,
   ArrowRight,
-  ShieldAlert,
+  ShieldCheck,
   CheckCircle2,
   UserCheck,
+  PlusCircle,
+  X,
+  AlertCircle,
 } from "lucide-react";
 
-interface InstallationJobSummary {
-  id: string;
+interface JobSummaryItem {
+  jobId: string;
   siteName: string;
   tankModel: string;
-  status:
-    | "Not Started"
-    | "In Progress"
-    | "Submitted for Review"
-    | "Has Open Deficiencies"
-    | "Ready for Handover"
-    | "Closed";
-  assignedLead: string;
+  status: string;
+  createdBy: string;
+  createdByName?: string;
+  guidelineVersion: number;
   totalStages: number;
-  completedStages: number;
-  openDeficiencies: number;
-  plannedDemobilizationDate: string;
+  totalRequirements: number;
+  plannedDemobilizationDate: string | null;
+  createdAt: string;
 }
 
 export default function DashboardPage() {
   const router = useRouter();
   const { user, signOut, signInDemo } = useAuth();
 
+  const [jobs, setJobs] = useState<JobSummaryItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
-  // Representative SBS Installation Jobs for Foundation Shell
-  const [jobsList] = useState<InstallationJobSummary[]>([
-    {
-      id: "job-001",
-      siteName: "Naivasha Horticultural Processing Plant",
-      tankModel: "SBS Cyclonic 250kL (Potable Water)",
-      status: "In Progress",
-      assignedLead: "Samuel Kiprop",
-      totalStages: 6,
-      completedStages: 3,
-      openDeficiencies: 1,
-      plannedDemobilizationDate: "2026-09-28",
-    },
-    {
-      id: "job-002",
-      siteName: "Eldoret Agro-Industrial Park",
-      tankModel: "SBS Standard 100kL (Fire Protection)",
-      status: "Submitted for Review",
-      assignedLead: "Samuel Kiprop",
-      totalStages: 5,
-      completedStages: 4,
-      openDeficiencies: 0,
-      plannedDemobilizationDate: "2026-09-30",
-    },
-    {
-      id: "job-003",
-      siteName: "Kilifi Coastal Community Water Depot",
-      tankModel: "SBS Elevated 50kL (Gravity Feed)",
-      status: "Ready for Handover",
-      assignedLead: "John Mwangi",
-      totalStages: 5,
-      completedStages: 5,
-      openDeficiencies: 0,
-      plannedDemobilizationDate: "2026-09-24",
-    },
-  ]);
+  // Create Job Modal State
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [modalError, setModalError] = useState<string | null>(null);
+  const [siteNameInput, setSiteNameInput] = useState("");
+  const [tankModelInput, setTankModelInput] = useState("");
+  const [demobDateInput, setDemobDateInput] = useState("");
 
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
-        <Card className="max-w-md w-full border-white/10 text-center p-6 space-y-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent-sky/20 text-accent-sky mx-auto font-black text-xl">
-            SBS
-          </div>
-          <CardTitle>Session Required</CardTitle>
-          <CardDescription>
-            You must be signed in with an authorized operational role to access the SBS Installation Verification System.
-          </CardDescription>
-          <div className="pt-2">
-            <Link href="/auth">
-              <Button variant="primary" className="w-full">
-                Go to Sign In
-              </Button>
-            </Link>
-          </div>
-        </Card>
-      </div>
-    );
-  }
+  const fetchJobs = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/sbs/jobs");
+      if (!res.ok) {
+        if (res.status === 401) {
+          router.push("/auth");
+          return;
+        }
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to load jobs");
+      }
+      const data = await res.json();
+      setJobs(data.jobs || []);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Error loading installation jobs");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [router]);
 
-  const filteredJobs = jobsList.filter((job) => {
-    const matchesSearch =
-      job.siteName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      job.tankModel.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      job.assignedLead.toLowerCase().includes(searchQuery.toLowerCase());
+  useEffect(() => {
+    fetchJobs();
+  }, [fetchJobs]);
 
-    if (statusFilter === "all") return matchesSearch;
-    if (statusFilter === "in_progress") return matchesSearch && job.status === "In Progress";
-    if (statusFilter === "review") return matchesSearch && job.status === "Submitted for Review";
-    if (statusFilter === "deficiencies") return matchesSearch && job.openDeficiencies > 0;
-    if (statusFilter === "handover") return matchesSearch && job.status === "Ready for Handover";
-    return matchesSearch;
-  });
+  const handleCreateJob = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!siteNameInput.trim() || !tankModelInput.trim()) {
+      setModalError("Please provide both site name and tank model.");
+      return;
+    }
 
-  const getRoleBadgeVariant = (role: SbsRole) => {
-    switch (role) {
-      case "QC Reviewer":
-        return "success";
-      case "Lead Installer":
-        return "default";
-      case "Installer":
-        return "outline";
-      case "Management":
-        return "outline";
-      default:
-        return "outline";
+    setIsSubmitting(true);
+    setModalError(null);
+
+    try {
+      const res = await fetch("/api/sbs/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          siteName: siteNameInput.trim(),
+          tankModel: tankModelInput.trim(),
+          plannedDemobilizationDate: demobDateInput || null,
+        }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Creation failed with status ${res.status}`);
+      }
+
+      const data = await res.json();
+      setIsModalOpen(false);
+      setSiteNameInput("");
+      setTankModelInput("");
+      setDemobDateInput("");
+      await fetchJobs();
+
+      // Navigate directly into newly instantiated job
+      if (data.job?.jobId) {
+        router.push(`/dashboard/jobs/${data.job.jobId}`);
+      }
+    } catch (err: unknown) {
+      setModalError(err instanceof Error ? err.message : "Error creating installation job");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
+  const handleRoleSwitch = async (role: SbsRole) => {
+    await signInDemo(role);
+    await fetchJobs();
+  };
+
+  const isAuthorizedToCreate =
+    user?.role === "Lead Installer" || user?.role === "Management";
+
+  // Filter jobs
+  const filteredJobs = jobs.filter((job) => {
+    const matchesSearch =
+      job.siteName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      job.tankModel.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      job.jobId.toLowerCase().includes(searchQuery.toLowerCase());
+
+    const matchesStatus =
+      statusFilter === "all" ? true : job.status.toLowerCase() === statusFilter.toLowerCase();
+
+    return matchesSearch && matchesStatus;
+  });
+
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      {/* Top Application Bar */}
-      <header className="border-b border-white/10 bg-surface-50/80 backdrop-blur-md sticky top-0 z-40">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+    <div className="min-h-screen bg-background text-foreground pb-20">
+      {/* TOP NAVIGATION / WORKSPACE HEADER */}
+      <header className="border-b border-white/5 bg-surface-100/90 backdrop-blur-md sticky top-0 z-30">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <Link href="/" className="flex items-center space-x-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-sky text-black font-extrabold text-sm">
-                SBS
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent-sky/15 text-accent-sky border border-accent-sky/30">
+                <ShieldCheck className="h-5 w-5" />
               </div>
-              <span className="font-bold text-white tracking-tight hidden sm:inline">Verification Portal</span>
+              <div>
+                <span className="font-bold text-sm tracking-tight text-white block">
+                  SBS TANKS
+                </span>
+                <span className="text-[10px] text-slate-400 font-mono block -mt-1">
+                  INSTALLATION VERIFICATION
+                </span>
+              </div>
             </Link>
-            <span className="text-slate-600 hidden sm:inline">|</span>
-            <Badge variant={getRoleBadgeVariant(user.role)} className="text-xs">
-              {user.role}
-            </Badge>
+            <span className="hidden sm:inline-block h-4 w-px bg-white/10 mx-2" />
+            <span className="hidden sm:inline-block text-xs text-slate-400 font-mono">
+              Slice 1 — Installation Domain
+            </span>
           </div>
 
           <div className="flex items-center space-x-3">
-            {/* Quick Role Switcher for prototype testing */}
-            <div className="hidden lg:flex items-center space-x-1.5 bg-surface-100/80 px-2 py-1 rounded-md border border-white/5 text-[11px] text-slate-400">
-              <span className="font-mono">Switch Role:</span>
-              <button
-                type="button"
-                onClick={async () => {
-                  await signInDemo("Lead Installer");
-                  router.refresh();
-                }}
-                className={`px-1.5 py-0.5 rounded hover:text-white ${
-                  user.role === "Lead Installer" ? "text-accent-sky font-semibold" : ""
-                }`}
+            {/* Active User Card & Role Switcher */}
+            <div className="flex items-center space-x-2 bg-surface-200/80 px-3 py-1.5 rounded-lg border border-white/5">
+              <div className="h-2 w-2 rounded-full bg-accent-emerald animate-pulse" />
+              <div className="text-left hidden sm:block">
+                <p className="text-xs font-semibold text-white leading-none">
+                  {user?.name || "Authenticating..."}
+                </p>
+                <p className="text-[10px] text-slate-400 font-mono leading-none mt-1">
+                  {user?.role || "Field Agent"}
+                </p>
+              </div>
+              <Badge
+                variant="outline"
+                className="text-[10px] font-mono border-accent-sky/30 text-accent-sky ml-1"
               >
-                Lead
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  await signInDemo("QC Reviewer");
-                  router.refresh();
-                }}
-                className={`px-1.5 py-0.5 rounded hover:text-white ${
-                  user.role === "QC Reviewer" ? "text-accent-emerald font-semibold" : ""
-                }`}
-              >
-                QC
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  await signInDemo("Installer");
-                  router.refresh();
-                }}
-                className={`px-1.5 py-0.5 rounded hover:text-white ${
-                  user.role === "Installer" ? "text-slate-200 font-semibold" : ""
-                }`}
-              >
-                Installer
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  await signInDemo("Management");
-                  router.refresh();
-                }}
-                className={`px-1.5 py-0.5 rounded hover:text-white ${
-                  user.role === "Management" ? "text-slate-200 font-semibold" : ""
-                }`}
-              >
-                Mgmt
-              </button>
-            </div>
-
-            <div className="text-right hidden sm:block">
-              <p className="text-xs font-medium text-white">{user.name}</p>
-              <p className="text-[10px] text-slate-400 font-mono">{user.email}</p>
+                {user?.role}
+              </Badge>
             </div>
 
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
-              onClick={async () => {
-                await signOut();
-                router.push("/auth");
-              }}
-              className="text-slate-400 hover:text-accent-rose space-x-1"
+              onClick={() => signOut()}
+              className="border-white/10 text-slate-300 hover:text-white"
             >
-              <LogOut className="h-4 w-4" />
+              <LogOut className="h-4 w-4 sm:mr-1.5" />
               <span className="hidden sm:inline text-xs">Sign Out</span>
             </Button>
           </div>
         </div>
+
+        {/* DEMO FAST-ROLE SWITCHER BAR */}
+        <div className="border-t border-white/5 bg-surface-50/50 px-4 sm:px-6 lg:px-8 py-2 overflow-x-auto">
+          <div className="max-w-7xl mx-auto flex items-center justify-between text-xs">
+            <span className="text-slate-400 font-mono text-[11px] shrink-0 mr-3">
+              Switch Perspective:
+            </span>
+            <div className="flex items-center space-x-2 shrink-0">
+              <button
+                onClick={() => handleRoleSwitch("Lead Installer")}
+                className={`px-2.5 py-1 rounded text-[11px] font-medium transition-colors ${
+                  user?.role === "Lead Installer"
+                    ? "bg-accent-sky/20 text-accent-sky border border-accent-sky/40"
+                    : "text-slate-400 hover:text-slate-200 hover:bg-surface-200"
+                }`}
+              >
+                Lead Installer (Can Create Jobs)
+              </button>
+              <button
+                onClick={() => handleRoleSwitch("Installer")}
+                className={`px-2.5 py-1 rounded text-[11px] font-medium transition-colors ${
+                  user?.role === "Installer"
+                    ? "bg-accent-sky/20 text-accent-sky border border-accent-sky/40"
+                    : "text-slate-400 hover:text-slate-200 hover:bg-surface-200"
+                }`}
+              >
+                Installer (View Checklist)
+              </button>
+              <button
+                onClick={() => handleRoleSwitch("QC Reviewer")}
+                className={`px-2.5 py-1 rounded text-[11px] font-medium transition-colors ${
+                  user?.role === "QC Reviewer"
+                    ? "bg-accent-emerald/20 text-accent-emerald border border-accent-emerald/40"
+                    : "text-slate-400 hover:text-slate-200 hover:bg-surface-200"
+                }`}
+              >
+                QC Reviewer
+              </button>
+              <button
+                onClick={() => handleRoleSwitch("Management")}
+                className={`px-2.5 py-1 rounded text-[11px] font-medium transition-colors ${
+                  user?.role === "Management"
+                    ? "bg-amber-400/20 text-amber-400 border border-amber-400/40"
+                    : "text-slate-400 hover:text-slate-200 hover:bg-surface-200"
+                }`}
+              >
+                Management
+              </button>
+            </div>
+          </div>
+        </div>
       </header>
 
-      {/* Main Operational Container */}
-      <main className="flex-1 mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 w-full space-y-8">
-        {/* Welcome & Role Context Banner */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-6">
+      {/* DASHBOARD CONTENT BODY */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 space-y-8">
+        {/* HEADER BAR */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-white">
-              {user.role === "QC Reviewer"
-                ? "Quality Engineering Review Queue"
-                : user.role === "Management"
-                ? "Installation Lifecycle & Handover Oversight"
-                : "Active Field Installation Jobs"}
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
+              Installation Jobs Directory
             </h1>
-            <p className="text-sm text-slate-400 mt-1">
-              {user.role === "QC Reviewer"
-                ? "Inspect requirement-linked evidence, validate completeness gates, and issue categorized deficiency decisions."
-                : user.role === "Management"
-                ? "Monitor site progress, review demobilization timelines, and inspect practical completion records."
-                : "Record offline-capable evidence against assigned requirements and submit stages for remote QC approval."}
+            <p className="mt-1 text-xs sm:text-sm text-slate-400">
+              Active water tank verification projects instantiated from official SBS engineering guidelines.
             </p>
           </div>
 
-          <div className="flex items-center space-x-2">
-            <Badge variant="outline" className="border-accent-sky/30 text-accent-sky text-xs py-1">
-              Offline Cache Ready
-            </Badge>
+          <div className="flex items-center space-x-3">
+            {isAuthorizedToCreate ? (
+              <Button
+                variant="primary"
+                onClick={() => setIsModalOpen(true)}
+                className="shadow-lg shadow-accent-sky/10 space-x-2"
+              >
+                <PlusCircle className="h-4 w-4" />
+                <span>New Installation Job</span>
+              </Button>
+            ) : (
+              <div className="text-right">
+                <span className="text-[11px] font-mono text-slate-500 block">
+                  Role: {user?.role}
+                </span>
+                <span className="text-[10px] text-slate-400 block">
+                  (Job creation requires Lead Installer or Management)
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Operational Metrics Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <Card className="border-white/10 bg-surface-100/50">
-            <CardContent className="p-4 sm:p-5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-slate-400">Assigned Jobs</span>
-                <Layers className="h-4 w-4 text-accent-sky" />
-              </div>
-              <div className="mt-2 flex items-baseline">
-                <span className="text-2xl font-bold text-white">3</span>
-                <span className="ml-2 text-xs text-slate-500">active sites</span>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-white/10 bg-surface-100/50">
-            <CardContent className="p-4 sm:p-5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-slate-400">Stages Under Review</span>
-                <ClipboardCheck className="h-4 w-4 text-accent-emerald" />
-              </div>
-              <div className="mt-2 flex items-baseline">
-                <span className="text-2xl font-bold text-white">1</span>
-                <span className="ml-2 text-xs text-slate-500">pending QC</span>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-white/10 bg-surface-100/50">
-            <CardContent className="p-4 sm:p-5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-slate-400">Open Deficiencies</span>
-                <AlertTriangle className="h-4 w-4 text-amber-400" />
-              </div>
-              <div className="mt-2 flex items-baseline">
-                <span className="text-2xl font-bold text-amber-400">1</span>
-                <span className="ml-2 text-xs text-slate-500">action required</span>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-white/10 bg-surface-100/50">
-            <CardContent className="p-4 sm:p-5">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-slate-400">Ready for Handover</span>
-                <FileCheck className="h-4 w-4 text-accent-emerald" />
-              </div>
-              <div className="mt-2 flex items-baseline">
-                <span className="text-2xl font-bold text-white">1</span>
-                <span className="ml-2 text-xs text-slate-500">certificate pending</span>
-              </div>
-            </CardContent>
-          </Card>
+        {/* GUIDELINE ANNOUNCEMENT BANNER */}
+        <div className="rounded-lg border border-accent-sky/20 bg-surface-100/60 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <div className="flex items-center space-x-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-sky/15 text-accent-sky">
+              <Layers className="h-4 w-4" />
+            </div>
+            <div>
+              <p className="font-semibold text-white">
+                Active Guideline: SBS Kenya Standard Tank Installation Guideline v1.0
+              </p>
+              <p className="text-slate-400">
+                New jobs automatically instantiate 6 verified installation stages (Anchorage, Shell, Liner, etc.) and all engineering requirement templates.
+              </p>
+            </div>
+          </div>
+          <Badge variant="outline" className="border-accent-emerald/40 text-accent-emerald shrink-0">
+            Published & Immutable
+          </Badge>
         </div>
 
-        {/* Filter & Search Bar */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-            <input
+        {/* CONTROLS: SEARCH & STATUS FILTER */}
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+            <Input
               type="text"
-              placeholder="Search site, tank model, or installer..."
+              placeholder="Search by site location, tank model, or Job ID..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-surface-100 pl-9 pr-4 py-2 text-sm text-white placeholder-slate-500 focus:border-accent-sky focus:outline-none focus:ring-1 focus:ring-accent-sky"
+              className="pl-9 bg-surface-100 border-white/10 text-white placeholder:text-slate-500"
             />
           </div>
 
-          <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 sm:pb-0 text-xs">
-            <button
-              type="button"
+          <div className="flex items-center space-x-2 overflow-x-auto pb-1">
+            <Button
+              variant={statusFilter === "all" ? "primary" : "secondary"}
+              size="sm"
               onClick={() => setStatusFilter("all")}
-              className={`px-3 py-1.5 rounded-lg border transition-colors ${
-                statusFilter === "all"
-                  ? "bg-surface-200 border-accent-sky/50 text-white font-medium"
-                  : "bg-surface-100 border-white/10 text-slate-400 hover:text-white"
-              }`}
+              className="text-xs"
             >
               All Jobs
-            </button>
-            <button
-              type="button"
-              onClick={() => setStatusFilter("in_progress")}
-              className={`px-3 py-1.5 rounded-lg border transition-colors ${
-                statusFilter === "in_progress"
-                  ? "bg-surface-200 border-accent-sky/50 text-white font-medium"
-                  : "bg-surface-100 border-white/10 text-slate-400 hover:text-white"
-              }`}
+            </Button>
+            <Button
+              variant={statusFilter === "not started" ? "primary" : "secondary"}
+              size="sm"
+              onClick={() => setStatusFilter("not started")}
+              className="text-xs"
+            >
+              Not Started
+            </Button>
+            <Button
+              variant={statusFilter === "in progress" ? "primary" : "secondary"}
+              size="sm"
+              onClick={() => setStatusFilter("in progress")}
+              className="text-xs"
             >
               In Progress
-            </button>
-            <button
-              type="button"
-              onClick={() => setStatusFilter("review")}
-              className={`px-3 py-1.5 rounded-lg border transition-colors ${
-                statusFilter === "review"
-                  ? "bg-surface-200 border-accent-sky/50 text-white font-medium"
-                  : "bg-surface-100 border-white/10 text-slate-400 hover:text-white"
-              }`}
-            >
-              Under Review
-            </button>
-            <button
-              type="button"
-              onClick={() => setStatusFilter("deficiencies")}
-              className={`px-3 py-1.5 rounded-lg border transition-colors ${
-                statusFilter === "deficiencies"
-                  ? "bg-surface-200 border-amber-400/50 text-amber-300 font-medium"
-                  : "bg-surface-100 border-white/10 text-slate-400 hover:text-white"
-              }`}
-            >
-              Deficiencies (1)
-            </button>
-            <button
-              type="button"
-              onClick={() => setStatusFilter("handover")}
-              className={`px-3 py-1.5 rounded-lg border transition-colors ${
-                statusFilter === "handover"
-                  ? "bg-surface-200 border-accent-emerald/50 text-accent-emerald font-medium"
-                  : "bg-surface-100 border-white/10 text-slate-400 hover:text-white"
-              }`}
-            >
-              Ready for Handover
-            </button>
+            </Button>
           </div>
         </div>
 
-        {/* Jobs List Section */}
-        <div className="space-y-4">
-          {filteredJobs.length === 0 ? (
-            <Card className="border-white/10 bg-surface-100/30 text-center py-12">
-              <CardContent className="space-y-3">
-                <Layers className="h-8 w-8 text-slate-500 mx-auto" />
-                <CardTitle className="text-base">No Matching Installation Jobs Found</CardTitle>
-                <CardDescription>
-                  Try adjusting your search criteria or clear the current status filter.
-                </CardDescription>
-                <Button variant="secondary" size="sm" onClick={() => { setSearchQuery(""); setStatusFilter("all"); }}>
-                  Reset Filters
-                </Button>
-              </CardContent>
-            </Card>
-          ) : (
-            filteredJobs.map((job) => (
-              <Card
-                key={job.id}
-                className="border-white/10 bg-surface-100/40 hover:border-white/20 transition-colors"
+        {/* 1. LOADING STATE */}
+        {isLoading && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[1, 2, 3].map((n) => (
+              <div
+                key={n}
+                className="h-64 rounded-xl border border-white/5 bg-surface-100/50 animate-pulse p-6"
+              />
+            ))}
+          </div>
+        )}
+
+        {/* 2. ERROR STATE */}
+        {!isLoading && error && (
+          <Card className="border-rose-500/20 bg-surface-100/80 p-8 text-center max-w-lg mx-auto">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-rose-500/10 text-rose-400 mb-4">
+              <AlertCircle className="h-6 w-6" />
+            </div>
+            <CardTitle className="text-lg text-white">Error Loading Jobs</CardTitle>
+            <CardDescription className="text-slate-400 mt-2">{error}</CardDescription>
+            <Button variant="secondary" onClick={fetchJobs} className="mt-4">
+              Retry
+            </Button>
+          </Card>
+        )}
+
+        {/* 3. EMPTY STATE */}
+        {!isLoading && !error && filteredJobs.length === 0 && (
+          <Card className="border-white/10 bg-surface-100/60 p-12 text-center max-w-lg mx-auto">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-surface-200 text-slate-400 mb-4">
+              <Layers className="h-6 w-6" />
+            </div>
+            <CardTitle className="text-lg text-white">No Installation Jobs Found</CardTitle>
+            <CardDescription className="text-slate-400 mt-2">
+              {searchQuery || statusFilter !== "all"
+                ? "No installation jobs match your current search and filter criteria."
+                : "No installation jobs have been instantiated yet."}
+            </CardDescription>
+            {isAuthorizedToCreate && (
+              <Button
+                variant="primary"
+                onClick={() => setIsModalOpen(true)}
+                className="mt-6 space-x-2"
               >
-                <CardContent className="p-5 sm:p-6">
-                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                    <div className="space-y-1.5">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-mono text-xs text-slate-400">{job.id}</span>
-                        <h2 className="text-base sm:text-lg font-semibold text-white">{job.siteName}</h2>
-                        {job.status === "Ready for Handover" && (
-                          <Badge variant="success" className="text-xs">
-                            Ready for Handover
-                          </Badge>
-                        )}
-                        {job.status === "Submitted for Review" && (
-                          <Badge variant="default" className="text-xs bg-sky-500/20 text-sky-300 border-sky-500/30">
-                            Under Review
-                          </Badge>
-                        )}
-                        {job.status === "In Progress" && (
-                          <Badge variant="outline" className="text-xs text-slate-300">
-                            In Progress
-                          </Badge>
-                        )}
-                        {job.openDeficiencies > 0 && (
-                          <Badge variant="danger" className="text-xs flex items-center space-x-1">
-                            <AlertTriangle className="h-3 w-3" />
-                            <span>{job.openDeficiencies} Deficiency Open</span>
-                          </Badge>
-                        )}
-                      </div>
+                <PlusCircle className="h-4 w-4" />
+                <span>Instantiate First Job</span>
+              </Button>
+            )}
+          </Card>
+        )}
 
-                      <p className="text-sm text-slate-300 font-medium">{job.tankModel}</p>
+        {/* 4. SUCCESS / POPULATED JOBS GRID */}
+        {!isLoading && !error && filteredJobs.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredJobs.map((job) => (
+              <Card
+                key={job.jobId}
+                className="border-white/10 bg-surface-100/70 hover:border-accent-sky/30 transition-all duration-200 flex flex-col justify-between group"
+              >
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <Badge
+                      variant="outline"
+                      className="border-accent-sky/30 text-accent-sky text-[10px] font-mono"
+                    >
+                      Guideline v{job.guidelineVersion}.0
+                    </Badge>
+                    <Badge
+                      variant="outline"
+                      className={
+                        job.status === "In Progress"
+                          ? "border-amber-400/30 text-amber-400 bg-amber-400/5 text-[10px]"
+                          : "border-slate-600 text-slate-300 text-[10px]"
+                      }
+                    >
+                      {job.status}
+                    </Badge>
+                  </div>
 
-                      <div className="flex flex-wrap items-center gap-4 text-xs text-slate-400 pt-1">
-                        <span className="flex items-center space-x-1">
-                          <UserCheck className="h-3.5 w-3.5 text-slate-500" />
-                          <span>Lead: {job.assignedLead}</span>
-                        </span>
-                        <span className="flex items-center space-x-1">
-                          <Clock className="h-3.5 w-3.5 text-slate-500" />
-                          <span>
-                            Stage Progress: {job.completedStages}/{job.totalStages} stages verified
-                          </span>
-                        </span>
-                        <span className="flex items-center space-x-1 text-slate-300">
-                          <Calendar className="h-3.5 w-3.5 text-accent-sky" />
-                          <span>Demobilization: {job.plannedDemobilizationDate}</span>
-                        </span>
-                      </div>
+                  <CardTitle className="text-lg text-white mt-2 group-hover:text-accent-sky transition-colors">
+                    {job.siteName}
+                  </CardTitle>
+                  <CardDescription className="text-slate-300 font-medium text-xs">
+                    {job.tankModel}
+                  </CardDescription>
+                </CardHeader>
+
+                <CardContent className="space-y-4 pt-0">
+                  <div className="grid grid-cols-2 gap-2 p-2.5 rounded-lg bg-surface-200/50 border border-white/5 text-center">
+                    <div>
+                      <p className="text-[10px] text-slate-400 font-mono">STAGES</p>
+                      <p className="text-base font-bold text-white mt-0.5">{job.totalStages}</p>
                     </div>
+                    <div>
+                      <p className="text-[10px] text-slate-400 font-mono">REQUIREMENTS</p>
+                      <p className="text-base font-bold text-accent-sky mt-0.5">
+                        {job.totalRequirements}
+                      </p>
+                    </div>
+                  </div>
 
-                    <div className="flex items-center space-x-3 pt-2 lg:pt-0">
+                  <div className="space-y-1 text-xs text-slate-400">
+                    <div className="flex items-center space-x-1.5">
+                      <Calendar className="h-3.5 w-3.5 text-slate-500" />
+                      <span>Created: {new Date(job.createdAt).toLocaleDateString()}</span>
+                    </div>
+                    {job.plannedDemobilizationDate && (
+                      <div className="flex items-center space-x-1.5 text-amber-400/80">
+                        <Clock className="h-3.5 w-3.5" />
+                        <span>Demobilization: {job.plannedDemobilizationDate}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="pt-2 border-t border-white/5">
+                    <Link href={`/dashboard/jobs/${job.jobId}`} className="w-full block">
                       <Button
                         variant="secondary"
                         size="sm"
-                        className="space-x-1.5 border-white/10 hover:border-accent-sky/50"
-                        onClick={() => alert(`Job ${job.id} detail view will be wired in Slice 1.`)}
+                        className="w-full justify-between group-hover:bg-accent-sky group-hover:text-background transition-all"
                       >
-                        <span>{user.role === "QC Reviewer" ? "Inspect Job" : "Open Verification"}</span>
-                        <ArrowRight className="h-3.5 w-3.5" />
+                        <span>View Stages & Checklist</span>
+                        <ArrowRight className="h-4 w-4" />
                       </Button>
-                    </div>
+                    </Link>
                   </div>
                 </CardContent>
               </Card>
-            ))
-          )}
-        </div>
+            ))}
+          </div>
+        )}
       </main>
+
+      {/* CREATE JOB MODAL DIALOG */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-xl border border-white/10 bg-surface-100 p-6 shadow-2xl space-y-6 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between pb-3 border-b border-white/5">
+              <div className="flex items-center space-x-2.5">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent-sky/15 text-accent-sky">
+                  <PlusCircle className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-white">Create Installation Job</h3>
+                  <p className="text-xs text-slate-400">Instantiate from Active Guideline v1.0</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {modalError && (
+              <div className="rounded-lg bg-rose-500/10 border border-rose-500/30 p-3 text-xs text-rose-300 flex items-center space-x-2">
+                <AlertCircle className="h-4 w-4 shrink-0 text-rose-400" />
+                <span>{modalError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleCreateJob} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-300">
+                  Site Name / Location *
+                </label>
+                <Input
+                  type="text"
+                  placeholder="e.g. Athi River Industrial Facility"
+                  value={siteNameInput}
+                  onChange={(e) => setSiteNameInput(e.target.value)}
+                  required
+                  className="bg-surface-200 border-white/10 text-white"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-300">
+                  Tank Specification & Capacity *
+                </label>
+                <Input
+                  type="text"
+                  placeholder="e.g. SBS Cyclonic 500kL (Fire Suppression)"
+                  value={tankModelInput}
+                  onChange={(e) => setTankModelInput(e.target.value)}
+                  required
+                  className="bg-surface-200 border-white/10 text-white"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-300">
+                  Planned Demobilization Target Date (Optional)
+                </label>
+                <Input
+                  type="date"
+                  value={demobDateInput}
+                  onChange={(e) => setDemobDateInput(e.target.value)}
+                  className="bg-surface-200 border-white/10 text-white"
+                />
+                <p className="text-[11px] text-slate-500">
+                  Drives pre-demobilization unresolved deficiency alerts.
+                </p>
+              </div>
+
+              {/* Informative Instantiation Callout */}
+              <div className="rounded-lg border border-accent-sky/20 bg-accent-sky/5 p-3 text-xs text-slate-300 space-y-1">
+                <p className="font-semibold text-accent-sky">Atomic Instantiation Notice</p>
+                <p className="text-slate-400 text-[11px] leading-relaxed">
+                  Upon creation, all 6 installation stages and their requirement templates from Published Guideline v1.0 will be instantiated with status &quot;Not Started&quot;.
+                </p>
+              </div>
+
+              <div className="pt-4 border-t border-white/5 flex items-center justify-end space-x-3">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setIsModalOpen(false)}
+                  disabled={isSubmitting}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  variant="primary"
+                  disabled={isSubmitting}
+                  className="space-x-1.5"
+                >
+                  {isSubmitting ? (
+                    <span>Instantiating...</span>
+                  ) : (
+                    <>
+                      <span>Create & Instantiate Job</span>
+                      <ArrowRight className="h-4 w-4" />
+                    </>
+                  )}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
